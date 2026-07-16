@@ -3,5 +3,12 @@
     "date": "2026-07-16",
     "price": 3021,
     "airline": "Air Canada"
+  },
+  {
+    "date": "2026-07-16",
+    "price": 2525,
+    "airline": "Air Canada",
+    "outbound_date": "2026-12-21",
+    "return_date": "2027-01-11"
   }
 ]
