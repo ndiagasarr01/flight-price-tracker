@@ -53,6 +53,7 @@ def fetch_flights(outbound_date, return_date):
         "currency": CURRENCY,
         "hl": "fr",
         "type": "1",  # aller-retour
+        "sort_by": "2",  # trier par prix (par défaut Google favorise les compagnies "préférées")
         "api_key": SERPAPI_KEY,
     }
 
