@@ -43,6 +43,13 @@ HISTORY_FILE = Path(__file__).parent / "price_history.json"
 # 1. Récupérer les prix via SerpApi (Google Flights) pour chaque combinaison
 #    de dates de départ/retour
 # ---------------------------------------------------------------------------
+def _airlines_label(flight_entry):
+    """Liste les compagnies distinctes de l'itinéraire (souvent plusieurs, ex. vol avec correspondance)."""
+    airlines = [s.get("airline", "?") for s in flight_entry.get("flights", [])]
+    unique_airlines = list(dict.fromkeys(airlines))
+    return " + ".join(unique_airlines) if unique_airlines else "?"
+
+
 def fetch_flights(outbound_date, return_date):
     params = {
         "engine": "google_flights",
@@ -63,7 +70,7 @@ def fetch_flights(outbound_date, return_date):
 
     candidates = (data.get("best_flights") or []) + (data.get("other_flights") or [])
     options = [
-        {"price": f["price"], "airline": f.get("flights", [{}])[0].get("airline", "?")}
+        {"price": f["price"], "airline": _airlines_label(f)}
         for f in candidates
         if isinstance(f.get("price"), (int, float))
     ]
