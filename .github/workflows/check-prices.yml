@@ -1,0 +1,45 @@
+name: Vérification quotidienne du prix du vol
+
+on:
+  schedule:
+    # 10h00 UTC = 5h00/6h00 heure de Québec (selon heure d'été/hiver)
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}   # permet de le lancer manuellement depuis l'onglet Actions
+
+permissions:
+  contents: write
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Lancer la vérification et envoyer le courriel
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          DEPARTURE_ID: "YQB"
+          ARRIVAL_ID: "DSS"
+          OUTBOUND_DATE: "2026-12-19"
+          RETURN_DATE: "2027-01-08"
+        run: python flight_price_tracker.py
+
+      - name: Sauvegarder l'historique des prix dans le dépôt
+        run: |
+          git config user.name "flight-price-bot"
+          git config user.email "actions@github.com"
+          git add price_history.json
+          git diff --quiet --cached || git commit -m "Mise à jour du prix du $(date -u +%Y-%m-%d)"
+          git push

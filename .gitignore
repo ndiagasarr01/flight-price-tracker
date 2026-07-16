@@ -1,0 +1,21 @@
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Variables d'environnement locales (secrets)
+.env
+
+# macOS
+.DS_Store
+
+# Éditeurs
+.vscode/
+.idea/
+
+# Configuration locale Claude Code
+.claude/
