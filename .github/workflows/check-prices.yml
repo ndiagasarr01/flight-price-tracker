@@ -31,7 +31,7 @@ jobs:
           EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          DEPARTURE_ID: "YQB"
+          DEPARTURE_ID: "YUL"
           ARRIVAL_ID: "DSS"
           OUTBOUND_DATES: "2026-12-19,2026-12-20,2026-12-21"
           RETURN_DATES: "2027-01-08,2027-01-09,2027-01-10,2027-01-11"

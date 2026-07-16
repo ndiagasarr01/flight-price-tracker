@@ -22,7 +22,7 @@ import requests
 # ---------------------------------------------------------------------------
 # Configuration (modifiable ici ou via variables d'environnement)
 # ---------------------------------------------------------------------------
-DEPARTURE_ID = os.environ.get("DEPARTURE_ID", "YQB")   # Québec
+DEPARTURE_ID = os.environ.get("DEPARTURE_ID", "YUL")   # Montréal
 ARRIVAL_ID = os.environ.get("ARRIVAL_ID", "DSS")        # Dakar (Blaise Diagne)
 OUTBOUND_DATES = os.environ.get("OUTBOUND_DATES", "2026-12-19,2026-12-20,2026-12-21").split(",")
 RETURN_DATES = os.environ.get("RETURN_DATES", "2027-01-08,2027-01-09,2027-01-10,2027-01-11").split(",")
