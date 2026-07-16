@@ -2,8 +2,9 @@
 """
 Flight Price Tracker
 ---------------------
-Vérifie quotidiennement le prix d'un vol via l'API Google Flights de SerpApi,
-compare avec l'historique, et envoie un courriel de rapport.
+Vérifie le prix d'un vol via l'API Google Flights de SerpApi pour plusieurs
+combinaisons de dates de départ/retour, compare la meilleure offre avec
+l'historique, et envoie un courriel de rapport listant les meilleures options.
 
 Configuration : voir les variables d'environnement listées ci-dessous (README.md).
 """
@@ -23,9 +24,10 @@ import requests
 # ---------------------------------------------------------------------------
 DEPARTURE_ID = os.environ.get("DEPARTURE_ID", "YQB")   # Québec
 ARRIVAL_ID = os.environ.get("ARRIVAL_ID", "DSS")        # Dakar (Blaise Diagne)
-OUTBOUND_DATE = os.environ.get("OUTBOUND_DATE", "2026-12-19")
-RETURN_DATE = os.environ.get("RETURN_DATE", "2027-01-08")
+OUTBOUND_DATES = os.environ.get("OUTBOUND_DATES", "2026-12-19,2026-12-20,2026-12-21").split(",")
+RETURN_DATES = os.environ.get("RETURN_DATES", "2027-01-08,2027-01-09,2027-01-10,2027-01-11").split(",")
 CURRENCY = os.environ.get("CURRENCY", "CAD")
+TOP_N_PER_COMBO = 3
 
 SERPAPI_KEY = os.environ.get("SERPAPI_KEY")
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
@@ -38,19 +40,16 @@ HISTORY_FILE = Path(__file__).parent / "price_history.json"
 
 
 # ---------------------------------------------------------------------------
-# 1. Récupérer le prix actuel via SerpApi (Google Flights)
+# 1. Récupérer les prix via SerpApi (Google Flights) pour chaque combinaison
+#    de dates de départ/retour
 # ---------------------------------------------------------------------------
-def fetch_current_price():
-    if not SERPAPI_KEY:
-        print("ERREUR: SERPAPI_KEY manquant.", file=sys.stderr)
-        sys.exit(1)
-
+def fetch_flights(outbound_date, return_date):
     params = {
         "engine": "google_flights",
         "departure_id": DEPARTURE_ID,
         "arrival_id": ARRIVAL_ID,
-        "outbound_date": OUTBOUND_DATE,
-        "return_date": RETURN_DATE,
+        "outbound_date": outbound_date,
+        "return_date": return_date,
         "currency": CURRENCY,
         "hl": "fr",
         "type": "1",  # aller-retour
@@ -62,17 +61,42 @@ def fetch_current_price():
     data = resp.json()
 
     candidates = (data.get("best_flights") or []) + (data.get("other_flights") or [])
-    prices = [f["price"] for f in candidates if isinstance(f.get("price"), (int, float))]
-
-    if not prices:
+    options = [
+        {"price": f["price"], "airline": f.get("flights", [{}])[0].get("airline", "?")}
+        for f in candidates
+        if isinstance(f.get("price"), (int, float))
+    ]
+    if not options:
         raise RuntimeError(f"Aucun prix trouvé dans la réponse SerpApi: {data.get('error', data)}")
 
-    cheapest = min(prices)
-    airline = next(
-        (f.get("flights", [{}])[0].get("airline", "?") for f in candidates if f.get("price") == cheapest),
-        "?",
-    )
-    return cheapest, airline
+    options.sort(key=lambda o: o["price"])
+    return options
+
+
+def fetch_all_combos():
+    if not SERPAPI_KEY:
+        print("ERREUR: SERPAPI_KEY manquant.", file=sys.stderr)
+        sys.exit(1)
+
+    combo_results = []
+    for outbound_date in OUTBOUND_DATES:
+        for return_date in RETURN_DATES:
+            try:
+                options = fetch_flights(outbound_date, return_date)
+            except Exception as exc:
+                print(f"AVERTISSEMENT: échec pour {outbound_date} → {return_date}: {exc}", file=sys.stderr)
+                continue
+            combo_results.append({
+                "outbound_date": outbound_date,
+                "return_date": return_date,
+                "options": options[:TOP_N_PER_COMBO],
+            })
+
+    if not combo_results:
+        raise RuntimeError("Aucune combinaison de dates n'a retourné de résultat.")
+
+    combo_results.sort(key=lambda c: c["options"][0]["price"])
+    return combo_results
 
 
 # ---------------------------------------------------------------------------
@@ -91,25 +115,26 @@ def save_history(history):
 # ---------------------------------------------------------------------------
 # 3. Construire et envoyer le courriel de rapport
 # ---------------------------------------------------------------------------
-def build_report(history, today_entry):
-    price_today = today_entry["price"]
-    yesterday_price = history[-2]["price"] if len(history) >= 2 else None
+def build_report(history, today_entry, combo_results):
+    best = combo_results[0]
+    best_option = best["options"][0]
 
     lines = [
         f"Vol {DEPARTURE_ID} → {ARRIVAL_ID}",
-        f"Dates : {OUTBOUND_DATE} → {RETURN_DATE}",
         "",
-        f"Prix aujourd'hui : {price_today} {CURRENCY} ({today_entry['airline']})",
+        f"MEILLEURE OFFRE : {best_option['price']} {CURRENCY} ({best_option['airline']})",
+        f"  Dates : {best['outbound_date']} → {best['return_date']}",
     ]
 
+    yesterday_price = history[-2]["price"] if len(history) >= 2 else None
     if yesterday_price is not None:
-        diff = price_today - yesterday_price
+        diff = today_entry["price"] - yesterday_price
         if diff > 0:
-            lines.append(f"Variation depuis hier : +{diff} {CURRENCY} (hausse)")
+            lines.append(f"  Variation depuis le dernier relevé : +{diff} {CURRENCY} (hausse)")
         elif diff < 0:
-            lines.append(f"Variation depuis hier : {diff} {CURRENCY} (baisse) 🎉")
+            lines.append(f"  Variation depuis le dernier relevé : {diff} {CURRENCY} (baisse) 🎉")
         else:
-            lines.append("Variation depuis hier : aucun changement")
+            lines.append("  Variation depuis le dernier relevé : aucun changement")
 
     last_7 = history[-7:]
     if len(last_7) >= 2:
@@ -120,6 +145,12 @@ def build_report(history, today_entry):
             f"  Min : {min(prices_7)} {CURRENCY}",
             f"  Max : {max(prices_7)} {CURRENCY}",
         ]
+
+    lines += ["", "Détail par combinaison de dates (triées du moins cher au plus cher) :"]
+    for combo in combo_results:
+        lines.append(f"\n{combo['outbound_date']} → {combo['return_date']} :")
+        for option in combo["options"]:
+            lines.append(f"  - {option['price']} {CURRENCY} ({option['airline']})")
 
     lines += ["", f"(Relevé du {today_entry['date']})"]
     return "\n".join(lines)
@@ -145,21 +176,25 @@ def send_email(subject, body):
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    price, airline = fetch_current_price()
+    combo_results = fetch_all_combos()
+    best = combo_results[0]
+    best_option = best["options"][0]
 
     history = load_history()
     today_entry = {
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "price": price,
-        "airline": airline,
+        "price": best_option["price"],
+        "airline": best_option["airline"],
+        "outbound_date": best["outbound_date"],
+        "return_date": best["return_date"],
     }
     history.append(today_entry)
     save_history(history)
 
-    report = build_report(history, today_entry)
+    report = build_report(history, today_entry, combo_results)
     print(report)  # utile pour les logs GitHub Actions
 
-    subject = f"✈️ Vol {DEPARTURE_ID}-{ARRIVAL_ID} : {price} {CURRENCY}"
+    subject = f"✈️ Vol {DEPARTURE_ID}-{ARRIVAL_ID} : à partir de {best_option['price']} {CURRENCY}"
     send_email(subject, report)
 
 

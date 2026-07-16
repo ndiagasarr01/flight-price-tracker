@@ -1,7 +1,9 @@
 # Flight Price Tracker — Montréal/Québec → Dakar
 
-Vérifie le prix du vol tous les jours et envoie un courriel de rapport
-(prix du jour, variation depuis hier, min/max des 7 derniers jours).
+Vérifie chaque semaine le prix du vol pour plusieurs combinaisons de dates
+de départ/retour, et envoie un courriel de rapport listant les 3 offres les
+moins chères par combinaison, la meilleure offre globale, la variation
+depuis le dernier relevé, et le min/max des 7 derniers relevés.
 
 ## Comment ça marche
 
@@ -19,8 +21,7 @@ automatiquement selon l'horaire défini, même si ton ordinateur est éteint.
 
 ### 2. Obtenir une clé SerpApi (accès aux données Google Flights)
 - Crée un compte gratuit sur [serpapi.com](https://serpapi.com/) —
-  le plan gratuit inclut 100 recherches/mois, largement assez pour 1
-  vérification par jour.
+  le plan gratuit inclut 100 recherches/mois.
 - Copie ta clé API (« API Key ») depuis ton tableau de bord SerpApi.
 
 ### 3. Créer un mot de passe d'application Gmail (pour l'envoi du courriel)
@@ -43,22 +44,27 @@ Ajoute :
 | `EMAIL_TO` | l'adresse où tu veux recevoir les alertes (peut être la même) |
 
 ### 5. C'est tout !
-Le workflow tourne automatiquement chaque jour à 10h00 UTC (~5-6h heure de
+Le workflow tourne automatiquement chaque lundi à 10h00 UTC (~5-6h heure de
 Québec). Tu peux aussi le lancer manuellement pour tester : onglet
-**Actions** de ton dépôt → « Vérification quotidienne du prix du vol » →
+**Actions** de ton dépôt → « Vérification hebdomadaire du prix du vol » →
 **Run workflow**.
 
 ## Personnaliser
 
 Modifie ces valeurs dans `.github/workflows/check-prices.yml` (section `env:`) :
 - `DEPARTURE_ID` / `ARRIVAL_ID` : codes aéroport (ex. `YQB`, `YUL`, `DSS`)
-- `OUTBOUND_DATE` / `RETURN_DATE` : format `AAAA-MM-JJ`
-- L'heure d'exécution : modifie le `cron` dans le fichier (format UTC)
+- `OUTBOUND_DATES` / `RETURN_DATES` : listes de dates séparées par des virgules
+  (format `AAAA-MM-JJ`). Le script teste **toutes les combinaisons**
+  départ × retour (ex. 3 dates de départ × 4 dates de retour = 12 combinaisons).
+- L'heure/fréquence d'exécution : modifie le `cron` dans le fichier (format UTC)
 
 ## Limites à connaître
-- Le plan gratuit SerpApi est plafonné à 100 requêtes/mois — 1 vérification/jour
-  = ~30/mois, donc large marge.
+- Le plan gratuit SerpApi est plafonné à 100 requêtes/mois. Chaque combinaison
+  de dates = 1 requête. Avec 12 combinaisons et une vérification par semaine,
+  ça fait ~48 requêtes/mois — reste une marge, mais évite d'ajouter trop de
+  dates ou de repasser en fréquence quotidienne sans réduire les combinaisons.
 - Les prix Google Flights peuvent différer légèrement de ce que tu vois en
   navigant directement (taxes, disponibilité en temps réel).
-- Si tu veux suivre plusieurs trajets ou dates en même temps, il faudra
-  dupliquer les variables d'environnement ou adapter le script en boucle.
+- Si une combinaison de dates échoue (erreur réseau, aucun vol trouvé), elle
+  est ignorée et un avertissement est affiché dans les logs — les autres
+  combinaisons sont quand même incluses dans le rapport.
