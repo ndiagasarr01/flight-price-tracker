@@ -45,5 +45,12 @@
     "airline": "Tap Air Portugal",
     "outbound_date": "2026-12-21",
     "return_date": "2027-01-11"
+  },
+  {
+    "date": "2026-07-23",
+    "price": 1815,
+    "airline": "Royal Air Maroc",
+    "outbound_date": "2026-12-19",
+    "return_date": "2027-01-11"
   }
 ]
